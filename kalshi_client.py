@@ -1,4 +1,4 @@
-"""Kalshi market data client using the official kalshi-python SDK.
+"""Kalshi market data client using the official kalshi_python_sync SDK.
 
 Wraps the SDK with pandas output, .env-based configuration, and
 convenience methods for fetching open markets and orderbooks.
@@ -14,19 +14,19 @@ import os
 from pathlib import Path
 
 import pandas as pd
-import kalshi_python
+from kalshi_python_sync import Configuration, KalshiClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_URLS = {
     "demo": "https://demo-api.kalshi.co/trade-api/v2",
-    "production": "https://trading-api.kalshi.com/trade-api/v2",
+    "production": "https://api.elections.kalshi.com/trade-api/v2",
 }
 
 
 class KalshiMarketClient:
-    """Thin wrapper around kalshi_python.KalshiClient with pandas output."""
+    """Thin wrapper around kalshi_python_sync.KalshiClient with pandas output."""
 
     def __init__(self, env=None, api_key_id=None, private_key_path=None):
         """Initialize the client.
@@ -55,11 +55,11 @@ class KalshiMarketClient:
 
         private_key = Path(private_key_path).read_text()
 
-        config = kalshi_python.Configuration(host=BASE_URLS[env])
+        config = Configuration(host=BASE_URLS[env])
         config.api_key_id = api_key_id
         config.private_key_pem = private_key
 
-        self.client = kalshi_python.KalshiClient(config)
+        self.client = KalshiClient(config)
         self.env = env
 
     # ------------------------------------------------------------------
@@ -68,7 +68,7 @@ class KalshiMarketClient:
 
     def get_open_markets(
         self,
-        limit=100,
+        limit=1000,
         event_ticker=None,
         series_ticker=None,
         tickers=None,
@@ -81,7 +81,7 @@ class KalshiMarketClient:
         Parameters
         ----------
         limit : int
-            Results per API page (max 1000).
+            Results per API page (max 1000, default 100).
         event_ticker : str, optional
             Filter by event ticker (comma-separated, max 10).
         series_ticker : str, optional
@@ -99,7 +99,9 @@ class KalshiMarketClient:
         -------
         pd.DataFrame
         """
-        kwargs = {"limit": limit, "status": "open"}
+        # Use a page size of min(limit, 1000) so we never request more than needed
+        page_size = min(limit, 1000)
+        kwargs = {"limit": page_size, "status": "open"}
         if event_ticker:
             kwargs["event_ticker"] = event_ticker
         if series_ticker:
@@ -112,25 +114,31 @@ class KalshiMarketClient:
             kwargs["max_close_ts"] = max_close_ts
 
         all_markets = []
-        cursor = ""
+        cursor = None
         pages = 0
+
         while True:
             if cursor:
                 kwargs["cursor"] = cursor
+
             response = self.client.get_markets(**kwargs)
+
+            # Convert markets to dicts
             all_markets.extend(
                 m.to_dict() if hasattr(m, "to_dict") else m.__dict__
                 for m in response.markets
             )
+
             cursor = response.cursor
             pages += 1
-            if not cursor or (max_pages and pages >= max_pages):
+
+            if not cursor or (max_pages and pages >= max_pages) or len(all_markets) >= limit:
                 break
 
         if not all_markets:
             return pd.DataFrame()
 
-        return pd.DataFrame(all_markets)
+        return pd.DataFrame(all_markets[:limit])
 
     def get_market(self, ticker: str) -> pd.Series:
         """Fetch a single market by ticker, returned as a pandas Series."""

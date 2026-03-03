@@ -1,0 +1,17 @@
+- name: ves_nominations
+  prompt: |
+    The Visual Effect Society has annual awards for visual effects. For each year from 2019-2024,
+    for nominated films, calculate how many awards they were nominated for. Also calculate whether
+    a film was nominated for "Outstanding Visual Effects in a Photoreal Feature" (Outstanding) or
+    "Outstanding Supporting Visual Effects in a Photoreal Feature" (Supporting).
+
+    Output the data as a tsv with the columns (year, title, # of nominations, outstanding),
+    where title is the title of the film, # of nominations is the number of nominations, and
+    outstanding is "outstanding" if the film was nominated for outstanding, "supporting" if it
+    was nominated for supporting, or empty if it was not.
+  output_format: tsv
+  output_columns:
+    - year
+    - title
+    - "# of nominations"
+    - outstanding

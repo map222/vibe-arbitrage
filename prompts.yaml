@@ -15,3 +15,14 @@
     - title
     - "# of nominations"
     - outstanding
+- name: gg_picture
+  prompt: |
+    Find the winners and nominees for the Golden Globe best picture awards from 2000-2024.
+    Return the data as a json with a key for "header", and a key for "tsv" which has a tsv with the columns:
+    (year, status, award,title), where status is whether the film was nominated or won”
+  output_format: tsv
+  output_columns:
+   - year
+   - status
+   - title
+   - award

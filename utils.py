@@ -1,6 +1,8 @@
 import io
 import pandas as pd
 import yaml
+import json
+from io import StringIO
 
 
 def clean_award_data(input_df):
@@ -52,6 +54,8 @@ def clean_award_data(input_df):
         df.loc[:, 'status'] = normalize_values(df['status'])
     return df
 
+
+
 def is_close(col_a, col_b, threshold= 0.05):
   return (1 - (col_a / col_b)).abs() < threshold
 
@@ -102,9 +106,14 @@ def run_prompt(prompt_name, api_key, model, prompts_file="prompts.yaml"):
         response_text = message.content[0].text
 
     elif provider == "Gemini":
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        response = genai.GenerativeModel(model).generate_content(content)
+        from google import genai
+
+        client = genai.Client()
+
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=content,
+            )
         response_text = response.text
 
     elif provider == "OpenAI":
@@ -119,14 +128,21 @@ def run_prompt(prompt_name, api_key, model, prompts_file="prompts.yaml"):
     else:
         raise ValueError(f"Unknown provider for model '{model}'")
 
-    output_format = cfg.get("output_format", "text")
-    if output_format != "tsv":
-        return response_text
+    tsv = json.loads(response_text.strip('`').strip('json\n') )['tsv']
+    output_df = pd.read_csv(StringIO(tsv), sep = '\t')
 
-    # Strip markdown code fences if the model wrapped output in them
-    lines = [l for l in response_text.strip().splitlines() if not l.startswith("```")]
-    df = pd.read_csv(io.StringIO("\n".join(lines)), sep="\t")
-    return df
+    # validate here
+    expected_cols = cfg.get("output_columns")
+    if expected_cols:
+        actual_cols = list(output_df.columns)
+        missing = [c for c in expected_cols if c not in actual_cols]
+        extra = [c for c in actual_cols if c not in expected_cols]
+        if missing or extra:
+            print(f"Column mismatch — missing: {missing}, extra: {extra}")
+        else:
+            print("Columns OK")
+
+    return output_df
 
 
 def get_provider(model):
